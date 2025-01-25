@@ -1,0 +1,4 @@
+bin/*
+*.rdi
+*.pdb
+*.exe

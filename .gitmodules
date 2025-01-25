@@ -1,0 +1,6 @@
+[submodule "selfbuild"]
+	path = selfbuild
+	url = git@github.com:ethanavatar/selfbuild.git
+[submodule "raylib"]
+	path = raylib
+	url = git@github.com:ethanavatar/raylib.git

@@ -209,15 +209,15 @@ int main(void) {
             int mode_text_width = 0;
             static_assert(Text_Skip_Mode_COUNT == 2);
             if (settings.text_skip_mode == Text_Skip_Mode_JumpToEnd) {
-                mode_text       = "Mode: Jump to End";
+                mode_text = "Mode: Jump to End";
 
             } else if (settings.text_skip_mode == Text_Skip_Mode_FastForward) {
-                mode_text       = "Mode: Fast Forward";
+                mode_text = "Mode: Fast Forward";
             }
 
             DrawText(
                 mode_text,
-                space_bar_x - (MeasureText(mode_text, 20.f) / 2.f), space_bar_y - 100,
+                (screen_width / 2.f) - (MeasureText(mode_text, 20.f) / 2.f), space_bar_y - 100,
                 20.f, GRAY
             );
 

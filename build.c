@@ -24,6 +24,7 @@ struct Build build(
         "src/main.c",
     };
 
+    struct Build stdlib = build_submodule(context, "selfbuild", Build_Kind_Shared_Library);
     struct Build raylib = build_submodule(context, "raylib", Build_Kind_Shared_Library);
 
     // @TODO: It would be nice to be able to "install" individual headers by copying them to the build directory.
@@ -52,7 +53,8 @@ struct Build build(
         .includes_count   = sizeof(includes) / sizeof(char *),
     };
 
-    exe.dependencies = calloc(1, sizeof(struct Build));
+    exe.dependencies = calloc(2, sizeof(struct Build));
+    add_dependency(&exe, stdlib);
     add_dependency(&exe, raylib);
 
     return exe;

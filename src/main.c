@@ -6,6 +6,7 @@
 #include "stdlib/thread_context.h"
 #include "stdlib/scratch_memory.h"
 #include "stdlib/string_builder.h"
+#include "stdlib/strings.h"
 
 const int screen_width  = 800;
 const int screen_height = 600;
@@ -25,71 +26,81 @@ enum Typing_Text_Animation_State {
 
 struct Typing_Text {
     enum Typing_Text_Animation_State state;
-    char *source;
+
+    const char *source;
     size_t source_length;
     size_t cursor;
 
+    char *workspace;
+
+    bool had_typo;
     char correct_letter;
 
     float typing_delay;
     float typing_timer;
-
-    bool had_typo;
-
     float next_letter_speed_modifier;
-
-    struct String_Builder builder;
 };
 
 void typing_animation_process(struct Typing_Text *text, float delta_time) {
     static_assert(Typing_Text_Animation_State_COUNT == 4);
+    if (text->state == Typing_Text_Animation_State_Finished) {
+        return;
+    }
 
-    if (text->typing_timer >= text->typing_delay + text->next_letter_speed_modifier) {
+    bool should_type = text->typing_timer >= text->typing_delay + text->next_letter_speed_modifier;
+    if (should_type) {
         text->typing_timer = 0;
         text->had_typo = false;
+    }
 
-        if (text->state == Typing_Text_Animation_State_ChooseLetter) {
-            text->correct_letter = text->source[text->cursor++];
-            text->next_letter_speed_modifier = GetRandomValue(-1, 1) * (text->typing_delay * 0.6f);
+    if (should_type && text->state == Typing_Text_Animation_State_ChooseLetter) {
+        text->correct_letter = text->source[text->cursor++];
+        text->next_letter_speed_modifier = GetRandomValue(-1, 1) * (text->typing_delay * 0.6f);
 
-            int typo_distance = 0;
-            bool is_typo = false;
-            if (!text->had_typo) {
-                typo_distance = GetRandomValue(0, 5);
-                is_typo = GetRandomValue(0, 25) == 0;
-            }
-
-            char chosen_letter = text->correct_letter;
-            if (is_typo) {
-                chosen_letter += typo_distance;
-                text->next_letter_speed_modifier = text->typing_delay * 3.0f;
-                text->state = Typing_Text_Animation_State_DeleteTypo;
-            }
-
-            string_builder_append(&text->builder, "%c", chosen_letter);
-
-            if (text->cursor >= text->source_length) {
-                text->state = Typing_Text_Animation_State_Finished;
-            }
-
-        } else if (text->state == Typing_Text_Animation_State_DeleteTypo) {
-            text->cursor--;
-            text->next_letter_speed_modifier = text->typing_delay * 2.0f;
-            text->state = Typing_Text_Animation_State_FixTypo;
-
-        } else if (text->state == Typing_Text_Animation_State_FixTypo) {
-            text->builder.buffer[text->builder.length - 1] = text->correct_letter;
-            text->cursor++;
-            text->state = Typing_Text_Animation_State_ChooseLetter;
-            text->had_typo = true;
-
-        } else if (text->state == Typing_Text_Animation_State_Finished) {
-
+        int typo_distance = 0;
+        bool is_typo = false;
+        if (!text->had_typo) {
+            typo_distance = GetRandomValue(0, 5);
+            is_typo       = GetRandomValue(0, 30) == 0;
         }
+
+        char chosen_letter = text->correct_letter;
+        if (is_typo) {
+            chosen_letter += typo_distance;
+            text->next_letter_speed_modifier = text->typing_delay * 3.0f;
+            text->state = Typing_Text_Animation_State_DeleteTypo;
+        }
+
+        if (text->cursor >= text->source_length) {
+            text->state = Typing_Text_Animation_State_Finished;
+        }
+
+    } else if (should_type && text->state == Typing_Text_Animation_State_DeleteTypo) {
+        text->cursor--;
+        text->next_letter_speed_modifier = text->typing_delay * 2.0f;
+        text->state = Typing_Text_Animation_State_FixTypo;
+
+    } else if (should_type && text->state == Typing_Text_Animation_State_FixTypo) {
+        text->workspace[text->cursor] = text->correct_letter;
+        text->cursor++;
+        text->state = Typing_Text_Animation_State_ChooseLetter;
+        text->had_typo = true;
+
     }
 
     text->typing_timer += delta_time;
 }
+
+enum Text_Skip_Mode {
+    Text_Skip_Mode_FastForward,
+    Text_Skip_Mode_JumpToEnd,
+    Text_Skip_Mode_COUNT,
+};
+
+struct Settings {
+    float text_chars_per_second;
+    enum Text_Skip_Mode text_skip_mode;
+};
 
 int main(void) {
 
@@ -107,13 +118,19 @@ int main(void) {
     // Get default system font
     Font font = GetFontDefault();
 
-    bool word_wrap = true;
+    struct Settings settings = {
+        .text_chars_per_second = 20,
+        .text_skip_mode = Text_Skip_Mode_JumpToEnd,
+    };
+
+
+    float default_typing_delay = 1.f / settings.text_chars_per_second;
 
     struct Typing_Text text = { 0 };
     text.source  = lorem2p;
     text.source_length = TextLength(text.source);
-    text.builder = string_builder_create(&persistent, 0);
-    text.typing_delay = 0.05f;
+    text.workspace = format_cstring(&persistent, "%s", text.source);
+    text.typing_delay = default_typing_delay;
 
     while (!WindowShouldClose()) {
         float delta_time = GetFrameTime();
@@ -121,33 +138,97 @@ int main(void) {
         if (IsKeyPressed(KEY_R)) {
             text.cursor = 0;
             text.state  = Typing_Text_Animation_State_ChooseLetter;
-            string_builder_clear(&text.builder);
         }
 
-        BeginDrawing();
+        BeginDrawing(); {
+
             ClearBackground(RAYWHITE);
 
             // Draw container border
             DrawRectangleLinesEx(container, 3, MAROON);
 
-            struct String_View view = string_builder_as_string(&text.builder);
-
             // Draw text in container (add some padding)
             DrawTextBoxed(
                 font,
-                view.data, text.cursor,
+                text.workspace, text.cursor,
                 (Rectangle){
-                    container.x + 4,
-                    container.y + 4,
-                    container.width - 4,
-                    container.height - 4
+                    container.x + 5,     container.y + 5,
+                    container.width - 5, container.height - 5
                 }, 20.0f, 2.0f,
-                word_wrap,
+                true,
                 GRAY
             );
 
             typing_animation_process(&text, delta_time);
-        EndDrawing();
+
+            float space_bar_width  = screen_width / 3.f;
+            float space_bar_height = 50;
+            float space_bar_x = (screen_width / 2.f) - (space_bar_width / 2.f);
+            float space_bar_y = screen_height - space_bar_height - 25;
+
+            DrawRectangleLinesEx((Rectangle) {
+                space_bar_x, space_bar_y + 5,
+                space_bar_width, space_bar_height
+            }, 3, MAROON);
+
+            if (IsKeyDown(KEY_SPACE)) {
+                DrawRectangleRec((Rectangle) {
+                    space_bar_x, space_bar_y + 5,
+                    space_bar_width, space_bar_height
+                }, WHITE);
+
+                DrawRectangleLinesEx((Rectangle) {
+                    space_bar_x, space_bar_y + 5,
+                    space_bar_width, space_bar_height
+                }, 3, MAROON);
+
+            } else {
+                DrawRectangleRec((Rectangle) {
+                    space_bar_x, space_bar_y,
+                    space_bar_width, space_bar_height
+                }, RAYWHITE);
+
+                DrawRectangleLinesEx((Rectangle) {
+                    space_bar_x, space_bar_y,
+                    space_bar_width, space_bar_height
+                }, 3, MAROON);
+            }
+
+            text.typing_delay = default_typing_delay;
+            if (IsKeyDown(KEY_SPACE)) {
+
+                static_assert(Text_Skip_Mode_COUNT == 2);
+                if (settings.text_skip_mode == Text_Skip_Mode_JumpToEnd) {
+                    text.cursor = text.source_length;
+
+                } else if (settings.text_skip_mode == Text_Skip_Mode_FastForward) {
+                    text.typing_delay /= 5.f;
+                }
+            }
+            const char *mode_text = "<mode_text>";
+            int mode_text_width = 0;
+            static_assert(Text_Skip_Mode_COUNT == 2);
+            if (settings.text_skip_mode == Text_Skip_Mode_JumpToEnd) {
+                mode_text       = "Mode: Jump to End";
+
+            } else if (settings.text_skip_mode == Text_Skip_Mode_FastForward) {
+                mode_text       = "Mode: Fast Forward";
+            }
+
+            DrawText(
+                mode_text,
+                space_bar_x - (MeasureText(mode_text, 20.f) / 2.f), space_bar_y - 100,
+                20.f, GRAY
+            );
+
+
+            if (IsKeyPressed(KEY_TAB)) {
+                settings.text_skip_mode = settings.text_skip_mode == Text_Skip_Mode_FastForward
+                    ? Text_Skip_Mode_JumpToEnd
+                    : Text_Skip_Mode_FastForward;
+            }
+
+        } EndDrawing();
     }
 
     CloseWindow();

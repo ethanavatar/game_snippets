@@ -19,11 +19,6 @@ extern struct Build __declspec(dllexport) build(struct Build_Context *, enum Bui
 struct Build build(
     struct Build_Context *context, enum Build_Kind requested_kind
 ) {
-
-    static char *files[] = {
-        "src/main.c",
-    };
-
     struct Build stdlib = build_submodule(context, "selfbuild", Build_Kind_Shared_Library);
     struct Build raylib = build_submodule(context, "raylib", Build_Kind_Shared_Library);
 
@@ -33,18 +28,37 @@ struct Build build(
 
     // @TODO: Abstract linking libraries because depending on if the target is static or shared,
     // the flags can either be like `-lwinmm` or `winmm.lib`
-    static char *link_flags[] = {
-        "-lwinmm",
-        "-lgdi32",
-        "-lopengl32",
+    static char *link_flags[] = { "-lwinmm", "-lgdi32", "-lopengl32" };
+
+    static char *lib_files[] = { "src/typing_text.c" };
+
+    static struct Build lib = {
+        .kind = Build_Kind_Shared_Library,
+        .name = "typing_text",
+
+        .sources          = lib_files,
+        .sources_count    = sizeof(lib_files) / sizeof(char *),
+
+        .link_flags       = link_flags,
+        .link_flags_count = sizeof(link_flags) / sizeof(char *),
+
+        .includes         = includes,
+        .includes_count   = sizeof(includes) / sizeof(char *),
     };
+
+    lib.dependencies = calloc(2, sizeof(struct Build));
+    add_dependency(&lib, stdlib);
+    add_dependency(&lib, raylib);
+    lib.root_dir = ".";
+
+    static char *exe_files[] = { "src/main.c" };
 
     static struct Build exe = {
         .kind = Build_Kind_Executable,
         .name = "game_snippets",
 
-        .sources          = files,
-        .sources_count    = sizeof(files) / sizeof(char *),
+        .sources          = exe_files,
+        .sources_count    = sizeof(exe_files) / sizeof(char *),
 
         .link_flags       = link_flags,
         .link_flags_count = sizeof(link_flags) / sizeof(char *),
@@ -56,6 +70,7 @@ struct Build build(
     exe.dependencies = calloc(2, sizeof(struct Build));
     add_dependency(&exe, stdlib);
     add_dependency(&exe, raylib);
+    add_dependency(&exe, lib);
 
     return exe;
 }

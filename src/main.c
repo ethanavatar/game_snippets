@@ -78,7 +78,7 @@ int main(void) {
                     fprintf(stderr, "Hard reloaded!\n");
 
                 } else {
-                    fprintf(stderr, "Reloaded! (%ld)\n", current_scene_info.last_library_write_time);
+                    fprintf(stderr, "Reloaded! (%lld)\n", current_scene_info.last_library_write_time);
                 }
             }
 
@@ -97,7 +97,7 @@ int main(void) {
     return 0;
 }
 
-static void *empty_init   (struct Game_Context *) { }
+static void *empty_init   (struct Game_Context *) { return NULL; }
 static void  empty_update (struct Game_Context *, void  *scene_data, float delta_time) { }
 static void  empty_destroy(struct Game_Context *, void *scene_data) { }
 

@@ -67,7 +67,7 @@ struct Build build(
         .includes_count   = sizeof(includes) / sizeof(char *),
     };
 
-    exe.dependencies = calloc(2, sizeof(struct Build));
+    exe.dependencies = calloc(3, sizeof(struct Build));
     add_dependency(&exe, stdlib);
     add_dependency(&exe, raylib);
     add_dependency(&exe, lib);
